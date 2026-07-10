@@ -25,20 +25,44 @@ namespace EmployeeManagement.Services
             Console.Write("Email: ");
             emp.Email = Console.ReadLine() ?? "";
 
-            Console.Write("Department: ");
-            emp.Department = Console.ReadLine() ?? "";
+            Console.Write("Department Name: ");
+            string departmentName = Console.ReadLine() ?? "";
 
             Console.Write("Experience Years: ");
             emp.ExperienceYears =
                 Convert.ToDouble(Console.ReadLine() ?? "0");
 
-            Entity employee = new Entity("cra32_employee");
+            QueryExpression deptQuery =
+                new QueryExpression("oma_department");
 
-            employee["cra32_name"] = emp.EmployeeCode;
-            employee["cra32_employeecode"] = emp.EmployeeCode;
-            employee["cra32_email"] = emp.Email;
-            employee["cra32_department"] = emp.Department;
-            employee["cra32_experienceyears"] =
+            deptQuery.ColumnSet =
+                new ColumnSet("oma_name");
+
+            deptQuery.Criteria.AddCondition(
+                "oma_name",
+                ConditionOperator.Equal,
+                departmentName);
+
+            var deptResult =
+                client.RetrieveMultiple(deptQuery);
+
+            if (deptResult.Entities.Count == 0)
+            {
+                Console.WriteLine("Department Not Found.");
+                return;
+            }
+
+            Entity employee = new Entity("oma_employee");
+
+            employee["oma_name"] = emp.EmployeeCode;
+            employee["oma_employeecode"] = emp.EmployeeCode;
+            employee["oma_email"] = emp.Email;
+            employee["oma_department"] =
+                new EntityReference(
+                    "oma_department",
+                    deptResult.Entities[0].Id);
+
+            employee["oma_experienceyears"] =
                 (decimal)emp.ExperienceYears;
 
             client.Create(employee);
@@ -49,14 +73,14 @@ namespace EmployeeManagement.Services
         public void ShowEmployees()
         {
             QueryExpression query =
-                new QueryExpression("cra32_employee");
+                new QueryExpression("oma_employee");
 
             query.ColumnSet =
                 new ColumnSet(
-                    "cra32_employeecode",
-                    "cra32_email",
-                    "cra32_department",
-                    "cra32_experienceyears");
+                    "oma_employeecode",
+                    "oma_email",
+                    "oma_department",
+                    "oma_experienceyears");
 
             var result =
                 client.RetrieveMultiple(query);
@@ -69,11 +93,14 @@ namespace EmployeeManagement.Services
 
             foreach (var emp in result.Entities)
             {
+                EntityReference department =
+                    emp.GetAttributeValue<EntityReference>("oma_department");
+
                 Console.WriteLine(
-                    $"\nCode: {emp.GetAttributeValue<string>("cra32_employeecode")}" +
-                    $"\nEmail: {emp.GetAttributeValue<string>("cra32_email")}" +
-                    $"\nDepartment: {emp.GetAttributeValue<string>("cra32_department")}" +
-                    $"\nExperience: {emp.GetAttributeValue<decimal?>("cra32_experienceyears")} Years");
+                    $"\nCode: {emp.GetAttributeValue<string>("oma_employeecode")}" +
+                    $"\nEmail: {emp.GetAttributeValue<string>("oma_email")}" +
+                    $"\nDepartment: {department?.Name}" +
+                    $"\nExperience: {emp.GetAttributeValue<decimal?>("oma_experienceyears")} Years");
             }
         }
 
@@ -83,13 +110,13 @@ namespace EmployeeManagement.Services
             string code = Console.ReadLine() ?? "";
 
             QueryExpression query =
-                new QueryExpression("cra32_employee");
+                new QueryExpression("oma_employee");
 
             query.ColumnSet =
                 new ColumnSet(true);
 
             query.Criteria.AddCondition(
-                "cra32_employeecode",
+                "oma_employeecode",
                 ConditionOperator.Equal,
                 code);
 
@@ -105,16 +132,43 @@ namespace EmployeeManagement.Services
             Entity employee = result.Entities[0];
 
             Console.Write("New Email: ");
-            employee["cra32_email"] =
+            employee["oma_email"] =
                 Console.ReadLine() ?? "";
 
-            Console.Write("New Department: ");
-            employee["cra32_department"] =
+            Console.Write("New Department Name: ");
+            string departmentName =
                 Console.ReadLine() ?? "";
+
+            QueryExpression deptQuery =
+                new QueryExpression("oma_department");
+
+            deptQuery.ColumnSet =
+                new ColumnSet("oma_name");
+
+            deptQuery.Criteria.AddCondition(
+                "oma_name",
+                ConditionOperator.Equal,
+                departmentName);
+
+            var deptResult =
+                client.RetrieveMultiple(deptQuery);
+
+            if (deptResult.Entities.Count == 0)
+            {
+                Console.WriteLine("Department Not Found.");
+                return;
+            }
+
+            employee["oma_department"] =
+                new EntityReference(
+                    "oma_department",
+                    deptResult.Entities[0].Id);
 
             Console.Write("New Experience Years: ");
-            employee["cra32_experienceyears"] =
-                Convert.ToDecimal(Console.ReadLine() ?? "0");
+
+            employee["oma_experienceyears"] =
+                Convert.ToDecimal(
+                    Console.ReadLine() ?? "0");
 
             client.Update(employee);
 
@@ -127,13 +181,13 @@ namespace EmployeeManagement.Services
             string code = Console.ReadLine() ?? "";
 
             QueryExpression query =
-                new QueryExpression("cra32_employee");
+                new QueryExpression("oma_employee");
 
             query.ColumnSet =
                 new ColumnSet(false);
 
             query.Criteria.AddCondition(
-                "cra32_employeecode",
+                "oma_employeecode",
                 ConditionOperator.Equal,
                 code);
 
@@ -147,7 +201,7 @@ namespace EmployeeManagement.Services
             }
 
             client.Delete(
-                "cra32_employee",
+                "oma_employee",
                 result.Entities[0].Id);
 
             Console.WriteLine("Employee Deleted.");
