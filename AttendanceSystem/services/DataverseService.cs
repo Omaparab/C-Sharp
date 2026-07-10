@@ -10,8 +10,7 @@ namespace EmployeeManagement.Services
                 "AuthType=OAuth;" +
                 "Url=https://org27c592b8.crm8.dynamics.com/;" +
                 "AppId=230791d2-abbc-48d2-b8fc-1685b9069c62;" +
-                "RedirectUri=http://localhost;" +
-                "LoginPrompt=Auto";
+                "RedirectUri=http://localhost;";
 
             return new ServiceClient(connectionString);
         }

@@ -6,17 +6,18 @@ namespace EmployeeManagement
     {
         static void Main()
         {
-
-
-            DataverseService ds =
-                new DataverseService();
+            DataverseService ds = new DataverseService();
 
             var client = ds.Connect();
 
-            Console.WriteLine(client.IsReady);
+            Console.WriteLine($"Connection Status: {client.IsReady}");
 
-            Console.ReadKey();
-
+            if (!client.IsReady)
+            {
+                Console.WriteLine(client.LastError);
+                Console.ReadKey();
+                return;
+            }
 
             Employee_Service service = new Employee_Service();
 
