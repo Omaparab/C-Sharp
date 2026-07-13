@@ -2,6 +2,9 @@ using EmployeeManagement.Models;
 using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
+using Microsoft.Xrm.Sdk.Messages;
+using Microsoft.Xrm.Sdk.Metadata;
+
 
 namespace EmployeeManagement.Services
 {
@@ -15,36 +18,34 @@ namespace EmployeeManagement.Services
             client = ds.Connect();
         }
 
+        
+
         public void AddEmployee()
         {
-            Employee emp = new Employee();
-
             Console.Write("Employee Code: ");
-            emp.EmployeeCode = Console.ReadLine() ?? "";
+            string employeeCode = Console.ReadLine() ?? "";
+
+            Console.Write("Name: ");
+            string name = Console.ReadLine() ?? "";
 
             Console.Write("Email: ");
-            emp.Email = Console.ReadLine() ?? "";
+            string email = Console.ReadLine() ?? "";
 
             Console.Write("Department Name: ");
             string departmentName = Console.ReadLine() ?? "";
 
             Console.Write("Experience Years: ");
-            emp.ExperienceYears =
-                Convert.ToDouble(Console.ReadLine() ?? "0");
+            decimal experienceYears = Convert.ToDecimal(Console.ReadLine() ?? "0");
 
-            QueryExpression deptQuery =
-                new QueryExpression("oma_department");
-
-            deptQuery.ColumnSet =
-                new ColumnSet("oma_name");
+            QueryExpression deptQuery = new QueryExpression("oma_department");
+            deptQuery.ColumnSet = new ColumnSet("oma_departmentname"); // explicit, avoids implicit oma_name lookup
 
             deptQuery.Criteria.AddCondition(
-                "oma_name",
+                "oma_departmentname",
                 ConditionOperator.Equal,
                 departmentName);
 
-            var deptResult =
-                client.RetrieveMultiple(deptQuery);
+            var deptResult = client.RetrieveMultiple(deptQuery);
 
             if (deptResult.Entities.Count == 0)
             {
@@ -54,20 +55,21 @@ namespace EmployeeManagement.Services
 
             Entity employee = new Entity("oma_employee");
 
-            employee["oma_name"] = emp.EmployeeCode;
-            employee["oma_employeecode"] = emp.EmployeeCode;
-            employee["oma_email"] = emp.Email;
-            employee["oma_department"] =
-                new EntityReference(
-                    "oma_department",
-                    deptResult.Entities[0].Id);
+            // Set the employee primary name attribute.
+            // Use the entered name rather than the code for the display name.
+            employee["oma_name"] = name;
 
-            employee["oma_experienceyears"] =
-                (decimal)emp.ExperienceYears;
+            employee["oma_employeecode"] = employeeCode;
+            employee["oma_email"] = email;
+            employee["oma_experienceyears"] = experienceYears;
+
+            employee["oma_department"] = new EntityReference(
+                "oma_department",
+                deptResult.Entities[0].Id);
 
             client.Create(employee);
 
-            Console.WriteLine("Employee Added Successfully.");
+            Console.WriteLine("Employee Added.");
         }
 
         public void ShowEmployees()
@@ -78,6 +80,7 @@ namespace EmployeeManagement.Services
             query.ColumnSet =
                 new ColumnSet(
                     "oma_employeecode",
+                    "oma_name",
                     "oma_email",
                     "oma_department",
                     "oma_experienceyears");
@@ -87,19 +90,34 @@ namespace EmployeeManagement.Services
 
             if (result.Entities.Count == 0)
             {
-                Console.WriteLine("No Employees Found.");
+                Console.WriteLine(
+                    "No Employees Found.");
                 return;
             }
 
             foreach (var emp in result.Entities)
             {
-                EntityReference department =
-                    emp.GetAttributeValue<EntityReference>("oma_department");
+                EntityReference department = emp.GetAttributeValue<EntityReference>("oma_department");
+                string deptName = department?.Name;
+                // If the lookup's Name wasn't populated, retrieve department name explicitly.
+                if (deptName == null && department != null)
+                {
+                    try
+                    {
+                        var d = client.Retrieve(department.LogicalName, department.Id, new ColumnSet("oma_departmentname"));
+                        deptName = d.GetAttributeValue<string>("oma_departmentname");
+                    }
+                    catch
+                    {
+                        deptName = "(unknown)";
+                    }
+                }
 
                 Console.WriteLine(
                     $"\nCode: {emp.GetAttributeValue<string>("oma_employeecode")}" +
+                    $"\nName: {emp.GetAttributeValue<string>("oma_name")}" +
                     $"\nEmail: {emp.GetAttributeValue<string>("oma_email")}" +
-                    $"\nDepartment: {department?.Name}" +
+                    $"\nDepartment: {deptName}" +
                     $"\nExperience: {emp.GetAttributeValue<decimal?>("oma_experienceyears")} Years");
             }
         }
@@ -107,13 +125,23 @@ namespace EmployeeManagement.Services
         public void UpdateEmployee()
         {
             Console.Write("Enter Employee Code: ");
-            string code = Console.ReadLine() ?? "";
+            string code =
+                Console.ReadLine() ?? "";
 
             QueryExpression query =
                 new QueryExpression("oma_employee");
 
+            // Request only the employee attributes we need to update.
+            // Avoid ColumnSet(true) because retrieving all attributes can cause
+            // Dataverse to attempt to resolve related lookup display names
+            // (which may reference attributes that don't exist on the target entity).
             query.ColumnSet =
-                new ColumnSet(true);
+                new ColumnSet(
+                    "oma_employeecode",
+                    "oma_email",
+                    "oma_experienceyears",
+                    "oma_name"
+                );
 
             query.Criteria.AddCondition(
                 "oma_employeecode",
@@ -125,14 +153,20 @@ namespace EmployeeManagement.Services
 
             if (result.Entities.Count == 0)
             {
-                Console.WriteLine("Employee Not Found.");
+                Console.WriteLine(
+                    "Employee Not Found.");
                 return;
             }
 
-            Entity employee = result.Entities[0];
+            Entity employee =
+                result.Entities[0];
 
             Console.Write("New Email: ");
             employee["oma_email"] =
+                Console.ReadLine() ?? "";
+
+            Console.Write("New Name: ");
+            employee["oma_name"] =
                 Console.ReadLine() ?? "";
 
             Console.Write("New Department Name: ");
@@ -143,10 +177,10 @@ namespace EmployeeManagement.Services
                 new QueryExpression("oma_department");
 
             deptQuery.ColumnSet =
-                new ColumnSet("oma_name");
+                new ColumnSet("oma_departmentname");
 
             deptQuery.Criteria.AddCondition(
-                "oma_name",
+                "oma_departmentname",
                 ConditionOperator.Equal,
                 departmentName);
 
@@ -155,7 +189,8 @@ namespace EmployeeManagement.Services
 
             if (deptResult.Entities.Count == 0)
             {
-                Console.WriteLine("Department Not Found.");
+                Console.WriteLine(
+                    "Department Not Found.");
                 return;
             }
 
@@ -172,13 +207,15 @@ namespace EmployeeManagement.Services
 
             client.Update(employee);
 
-            Console.WriteLine("Employee Updated.");
+            Console.WriteLine(
+                "Employee Updated.");
         }
 
         public void DeleteEmployee()
         {
             Console.Write("Enter Employee Code: ");
-            string code = Console.ReadLine() ?? "";
+            string code =
+                Console.ReadLine() ?? "";
 
             QueryExpression query =
                 new QueryExpression("oma_employee");
@@ -196,7 +233,8 @@ namespace EmployeeManagement.Services
 
             if (result.Entities.Count == 0)
             {
-                Console.WriteLine("Employee Not Found.");
+                Console.WriteLine(
+                    "Employee Not Found.");
                 return;
             }
 
@@ -204,7 +242,8 @@ namespace EmployeeManagement.Services
                 "oma_employee",
                 result.Entities[0].Id);
 
-            Console.WriteLine("Employee Deleted.");
+            Console.WriteLine(
+                "Employee Deleted.");
         }
     }
 }
